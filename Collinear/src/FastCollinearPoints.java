@@ -4,10 +4,13 @@ import edu.princeton.cs.algs4.StdOut;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class FastCollinearPoints {
     private final LineSegment[] segmentsFinal;
+    private Point[] sortedPoints;
 
     public FastCollinearPoints(Point[] points) {   // constructor
         if (points == null)
@@ -16,10 +19,10 @@ public class FastCollinearPoints {
             if (points[i] == null)
                 throw new IllegalArgumentException();
         }
-        Point[] check = Arrays.copyOf(points, points.length);
-        Arrays.sort(check);
+        sortedPoints = Arrays.copyOf(points, points.length);
+        Arrays.sort(sortedPoints);
         for (int i = 0; i < points.length - 1; i++) {
-            if (check[i].compareTo(check[i + 1]) == 0) throw new IllegalArgumentException();
+            if (sortedPoints[i].compareTo(sortedPoints[i + 1]) == 0) throw new IllegalArgumentException();
         }
         segmentsFinal = findAllSegments(points);
     }
@@ -31,19 +34,15 @@ public class FastCollinearPoints {
 
         List<Point> startPoints = new ArrayList<Point>();
         List<Point> finishPoints = new ArrayList<Point>();
-        List<Double> slopes = new ArrayList<>();
 
-        Point[] sortedPoints = Arrays.copyOf(points, points.length);
-        Arrays.sort(sortedPoints);
-        Point[] pointsForSort = Arrays.copyOf(points, points.length);
+        Point[] slopeSortingPoints = Arrays.copyOf(points, points.length);
         for (int i = 0; i < points.length; i++) {
             Point current = sortedPoints[i];
-            Arrays.sort(pointsForSort, current.slopeOrder());
-            if (pointsForSort[1]==pointsForSort[points.length-1]) return new LineSegment[]{new LineSegment(sortedPoints[0],sortedPoints[sortedPoints.length-1])};
+            Arrays.sort(slopeSortingPoints, current.slopeOrder());
 
             int num = 2; //current number of collinear points
             for (int j = 1; j < points.length - 1; j++) {
-                if (current.slopeTo(pointsForSort[j]) == current.slopeTo(pointsForSort[j + 1])) {
+                if (current.slopeTo(slopeSortingPoints[j]) == current.slopeTo(slopeSortingPoints[j + 1])) {
                     if (j != points.length - 2) {
                         num += 1;
                         continue;
@@ -55,47 +54,39 @@ public class FastCollinearPoints {
                 if (num >= 4) {
                     Point[] goodPoints = new Point[num];
                     for (int n = 0; n < num - 1; n++) {
-                        goodPoints[n] = pointsForSort[j - n];
+                        goodPoints[n] = slopeSortingPoints[j - n];
                     }
                     goodPoints[num - 1] = current;
                     Arrays.sort(goodPoints);
-
-                    if (checkNotRepeat(startPoints, slopes, goodPoints[0], goodPoints[num - 1])) {
-                        startPoints.add(goodPoints[0]);
-                        finishPoints.add(goodPoints[num - 1]);
-                        slopes.add(goodPoints[0].slopeTo(goodPoints[num - 1]));
-                    }
+                    startPoints.add(goodPoints[0]);
+                    finishPoints.add(goodPoints[num - 1]);
                 }
                 num = 2;
             }
         }
-        LineSegment[] segments4 = new LineSegment[startPoints.size()];
-        for (int i = 0; i < startPoints.size(); i++) {
-            segments4[i] = new LineSegment(startPoints.get(i), finishPoints.get(i));
+        Integer[] indexes=new Integer[finishPoints.size()];
+        for (int i=0;i<finishPoints.size();i++){
+            indexes[i]=i;
         }
-        return segments4;
-    }
-
-    private boolean checkNotRepeat(List<Point> startPoints, List<Double> slopes, Point start, Point finish) {
-        if (startPoints.isEmpty()) return true;
-        if (start.compareTo(startPoints.get(0)) < 0 || start.compareTo(startPoints.get(startPoints.size() - 1)) > 0)
-            return true;
-        int index = Arrays.binarySearch(startPoints.toArray(new Point[startPoints.size()]), start);
-        if (index < 0) return true;
-        double slope = start.slopeTo(finish);
-
-        for (int i = index; i < startPoints.size(); i++) { //to right from index
-            int compare = startPoints.get(i).compareTo(start);
-            if (compare > 0 || slopes.get(i) > slope) break;
-            if (compare == 0 && slopes.get(i) == slope) return false;
+        //sort index of finish point by comparing start point: for fast finding duplicate line segments
+        //
+        Arrays.sort(indexes,new Comparator<Integer>(){
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                int c=startPoints.get(o1).compareTo(startPoints.get(o2));
+                if (c==0) return finishPoints.get(o1).compareTo(finishPoints.get(o2));
+                else return c;
+            }
+        });
+        Collections.sort(startPoints);
+        if (startPoints.isEmpty()) return new LineSegment[0];
+        ArrayList<LineSegment> segments4 = new ArrayList<>();
+        segments4.add(new LineSegment(startPoints.get(0), finishPoints.get(indexes[0])));
+        for (int i = 1; i < startPoints.size(); i++) {
+            if (startPoints.get(i).equals(startPoints.get(i-1)) && finishPoints.get(indexes[i]).equals(finishPoints.get(indexes[i-1]))) continue;
+            segments4.add(new LineSegment(startPoints.get(i), finishPoints.get(indexes[i])));
         }
-
-        for (int i = index; i >= 0; i--) { //to left from index
-            int compare = startPoints.get(i).compareTo(start);
-            if (compare < 0 || slopes.get(i) < slope) return true;
-            if (compare == 0 && slopes.get(i) == slope) return false;
-        }
-        return true;
+        return segments4.toArray(new LineSegment[segments4.size()]);
     }
 
     public int numberOfSegments() {     // the number of line segments
